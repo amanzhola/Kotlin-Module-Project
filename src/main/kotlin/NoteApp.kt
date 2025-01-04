@@ -1,5 +1,7 @@
+import kotlin.system.exitProcess
+
 class NoteApp {
-    private val archives = mutableListOf<Archive>()
+    private val archives = mutableListOf<ArchiveItem>()
 
     fun start() {
         while (true) {
@@ -9,7 +11,7 @@ class NoteApp {
                 3 -> searchNotes()
                 4 -> {
                     println("Exiting the program.")
-                    return
+                    exitProcess(0)
                 }
                 0 -> println("Going back to the main menu.")
                 null -> println("No entry done. Please try again.")
@@ -33,12 +35,12 @@ class NoteApp {
                 return
             }
 
-            if (archives.any { it.name.equals(name, ignoreCase = true) }) {
+            if (archives.any { it.title.equals(name, ignoreCase = true) }) {
                 println("An archive with the name '$name' already exists. Please choose a different name.")
                 continue
             }
 
-            archives.add(Archive(name))
+            archives.add(ArchiveItem(name))
             println("Archive '$name' created successfully.")
             return
         }
@@ -49,64 +51,54 @@ class NoteApp {
             println("No archives available.")
             return
         }
+        // Указываем, что мы работаем только с ArchiveItem
         manageList(archives) { archive -> manageArchive(archive) }
     }
 
-    private fun manageArchive(archive: Archive) {
+    private fun manageArchive(archive: ArchiveItem) {
         while (true) {
             when (showMenuForArchive(archive)) {
                 1 -> addNoteToArchive(archive)
-                2 -> viewNotesInArchive(archive)
+                2 -> viewManageableItems(archive.notes.map { NoteItem(it.title, it.content) }, "notes") // Указываем, что это заметки
                 0 -> return
                 else -> println("Invalid option. Please try again.")
             }
         }
     }
 
-    private fun showMenuForArchive(archive: Archive): Int? {
+    private fun showMenuForArchive(archive: ArchiveItem): Int? {
         return showMenu(
-            "Managing Archive '${archive.name}'",
+            "Managing Archive '${archive.title}'",
             listOf("Add Note", "View Notes")
         )
     }
 
-    private fun addNoteToArchive(archive: Archive) {
-        while (true) {
-            val title = readInputString("Enter note title (or press Enter to go back): ")
-            if (title.isBlank()) {
-                println("Warning: You entered an empty value. Going back to archive management.")
-                return
-            }
-
-            if (archive.notes.any { it.title.equals(title, ignoreCase = true) }) {
-                println("A note with the title '$title' already exists in archive '${archive.name}'. Please use a different title.")
-                continue
-            }
-
-            val content = readInputString("Enter note content (or press Enter to go back): ")
-            if (content.isBlank()) {
-                println("Warning: You entered an empty value. Going back to archive management.")
-                return
-            }
-
-            archive.notes.add(Note(title, content))
-            println("Note '$title' added to archive '${archive.name}' successfully.")
-            return
-        }
+    private fun addNoteToArchive(archive: ArchiveItem) {
+        if (promptForTitleAndContent { title, content ->
+                if (archive.notes.any { it.title.equals(title, ignoreCase = true) }) {
+                    println("A note with the title '$title' already exists. Please use a different title.")
+                } else {
+                    archive.notes.add(NoteItem(title, content)) // Здесь используем правильный тип
+                    println("Note '$title' added to archive '${archive.title}' successfully.")
+                }
+            }) return
     }
 
-    private fun viewNotesInArchive(archive: Archive) {
-        if (archive.notes.isEmpty()) {
-            println("No notes in archive '${archive.name}'.")
+    private fun <T : ManageableItem> viewManageableItems(items: List<T>, type: String) {
+        if (items.isEmpty()) {
+            println("No $type found.")
             return
         }
 
         println("\n====================")
-        println("Notes in Archive '${archive.name}':")
+        println("List of $type:")
         println("====================")
-        archive.notes.forEach { note ->
-            println("Title: ${note.title}")
-            println("Content: ${note.content}\n")
+        items.forEach { item ->
+            println("Title: ${item.title}")
+            if (item is NoteItem) {
+                println("Content: ${item.content}")
+            }
+            println()
         }
         println("====================")
     }
@@ -134,12 +126,12 @@ class NoteApp {
         }
     }
 
-    private fun manageList(items: List<Archive>, action: (Archive) -> Unit) {
+    private fun manageList(items: List<ArchiveItem>, action: (ArchiveItem) -> Unit) {
         while (true) {
             println("\n====================")
-            println("      Items List    ")
+            println("      Archives List    ")
             println("====================")
-            items.forEachIndexed { index, item -> println("${index + 1}. ${item.name}") }
+            items.forEachIndexed { index, item -> println("${index + 1}. ${item.title}") }
             println("0. Back")
             println("====================")
 
@@ -162,9 +154,26 @@ class NoteApp {
         return readInput("Choose an option: ", options.size)
     }
 
+    private fun promptForTitleAndContent(action: (String, String) -> Unit): Boolean {
+        val title = readInputString("Enter title (or press Enter to go back): ")
+        if (title.isBlank()) {
+            println("Warning: You entered an empty value.")
+            return false
+        }
+
+        val content = readInputString("Enter content (or press Enter to go back): ")
+        if (content.isBlank()) {
+            println("Warning: You entered an empty value.")
+            return false
+        }
+
+        action(title, content) // Вызов действия
+        return true
+    }
+
     private fun readInputString(prompt: String): String {
         print(prompt)
-        return readlnOrNull() ?: ""
+        return readlnOrNull() ?: "" // Используем readlnOrNull
     }
 
     private fun readInput(prompt: String, maxOption: Int): Int? {
